@@ -1,0 +1,123 @@
+<html>
+<head>
+	<title>Video test</title>
+</head>
+<body>
+	<div id="log" style="position:relative; float:right; width:500px;">Init</div>
+	<video style="width: 1280px; height:720px;" id="video" src="jojo.mp4">Your browser has no vids. Shame!</video>
+	<div>
+		<button id="toggleMode">Toggle mode</button>
+	</div>
+	<div id="status"></div>
+</body>
+<script type="text/javascript">
+var v = document.getElementById("video")
+var s = document.getElementById("status")
+var l = document.getElementById("log")
+
+var uuid = ("0000" + (Math.random()*Math.pow(36,4) << 0).toString(36)).slice(-6).toUpperCase()
+
+var mb = document.getElementById("toggleMode")
+mb.style.display = "none"
+var master = window.location.hash == "#master"
+
+function updateMButton() {
+	mb.innerHTML = "Mode: " + ((master) ? "Master" : "Client")
+	v.controls = master
+}
+updateMButton()
+
+mb.onclick = function() {
+	master = !master
+	updateMButton()
+}
+
+var so;
+if ("WebSocket" in window) {
+	console.log("We have WebSocket")
+	so = new WebSocket("ws://0x40hu.es:8088/")
+	so.onopen = function() {
+		console.log("Socket open!")
+		so.send("join " + uuid)
+	}
+	so.onmessage  = function(e) {
+		console.log("Socket message in:")
+		console.log(e.data)
+		processMessage(e.data)
+	}
+	so.onclose  = function() {
+		console.log("Socket closed!")
+	}
+}
+
+function processMessage(m) {
+	l.innerHTML += "<br><span style='color:blue'>&lt;&lt; " + m + "</span>"
+
+	if (!master) {
+		var sp = m.split(" ", 2)
+		switch (sp[0]) {
+			case "play":
+			case "pause":
+				var timeDelta = parseFloat(sp[1]) - v.currentTime
+				if (Math.abs(timeDelta) > 0.5) {
+					v.currentTime = parseFloat(sp[1])
+				}
+				if (sp[0] == "play") { v.play()  }
+				else 				 { v.pause() }
+				break
+		}
+	}
+}
+
+function sendEvent(e) {
+	switch(e.type) {
+		case "play":
+			send(e.type + " " + v.currentTime)
+			break
+		case "pause":
+			if (!v.seeking) {
+				send(e.type + " " + v.currentTime)
+			}
+			break
+		// case "seeked":
+			// send(e.type + " to " + v.currentTime)
+			// break
+	}
+}
+
+function send(txt) {
+	l.innerHTML += "<br><span style='color:green'>&gt;&gt; " + txt + "</span>"
+	so.send(txt)
+}
+
+function onEvent(e) {
+	// s.innerHTML = "Event: " + e.type
+	console.log(e.type, e)
+	if (master) {
+		sendEvent(e)
+	}
+	// switch(e.type) {
+	// 	case "play":
+	// 	console.log("Playing!!")
+	// 	break
+	// 	case "pause":
+	// 	if (v.seeking) {
+	// 		console.log("Seek-pause")
+	// 	} else {
+	// 		console.log("pause")
+	// 	}
+	// 	break
+	// 	case "seeked":
+
+	// 	default:
+	// 	break
+	// }
+}
+
+v.addEventListener("play", onEvent)
+v.addEventListener("seeking", onEvent)
+v.addEventListener("seeked", onEvent)
+v.addEventListener("pause", onEvent)
+
+</script>
+</html>
