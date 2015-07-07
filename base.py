@@ -27,6 +27,13 @@ class CouchListener(WebSocket.WebSocketServerClient):
 	def on_pong(self, j, ws):
 		delta = time.time() - j["time"]
 		print "Ping to {} and back: {:0.1f}".format(ws.uuid, delta*1000)
+	
+	def on_play(self, j, ws):
+		wss.sendAll(j)
+	on_pause = on_play
+	on_seeked = on_play
+	on_setvideo = on_play
+	
 
 
 
@@ -50,9 +57,13 @@ class Root(object):
 	@cherrypy.expose
 	def index(self):
 		tmpl = tmplLookup.get_template("testing.mako.html")
-		wshost = re.match(r'https?:\/\/(.*?)(?::\d+)$', cherrypy.request.base).group(1)
-		wsport = 8088
-		return tmpl.render(wshost=wshost, wsport=wsport)
+		context = { 
+					"wshost" : re.match(r'https?:\/\/(.*?)(?::\d+)$', cherrypy.request.base).group(1),
+					"wsport" : 8088,
+					"port" : 8088,
+					"base" : cherrypy.request.base,
+				  }
+		return tmpl.render(**context)
 
 	# @cherrypy.expose
 	# def default(self, key=None, **kwargs):

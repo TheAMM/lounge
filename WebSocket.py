@@ -256,6 +256,10 @@ class WebSocketServer(threading.Thread):
 		# 	for func in self.eventListeners[name]:
 		# 		func(name, data, ws)
 
+	def sendAll(self, data):
+		for t in self.threads:
+			t.send(data)
+
 
 	def die(self):
 		self.logger.info("WebSocketServer shutting down")

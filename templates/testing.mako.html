@@ -3,40 +3,204 @@
 	<title>Video test</title>
 </head>
 <body>
-	<div id="log" style="position:relative; float:right; width:500px;">Init</div>
-	<video style="width: 1280px; height:720px;" id="video">Your browser has no vids. Shame!</video>
+	<div id="log" style="position:relative; float:right; width:500px;">
+		<div id="data"></div>
+		Init
+	</div>
+	<video style="width: 1280px; height:720px;" controls id="video">Your browser has no vids. Shame!</video>
+	<canvas width="1280" height="5" id="progress" ></canvas>
 	<div>
-		<button id="toggleMode">Toggle mode</button>
+		<div>
+			<button id="toggleMode">Become master</button>
+			<button id="ping">Ping</button>
+		</div>
+		<div>
+			<button id="setVideo">Set video</button>
+			<input style="min-width:600px;" id="videoUrl" type="url"  value="${base}/static/video/RevolverWater.webm"></input>
+			<!-- <button id="ping">Ping</button> -->
+		</div>
+		<div>
+			<%
+			  videos = [
+			  	"RevolverWater.webm",
+			  	"BigHero.mp4",
+			  ]
+			%>
+			% for f in videos:
+			<a class="videoLink" href="${base}/static/video/${f}">${f|h}</a>
+			% endfor
+		</div>
 	</div>
 	<div id="status"></div>
 </body>
 <script type="text/javascript" src="/static/js/vsync.js"></script>
 <script type="text/javascript">
-function onEvent(e) {
-	var j = e.detail.j;
-	var wsc = j.detail.wsc;
-	
-	switch (e.type) {
-		case "ping":
-			wsc.sendMessage( {type:"pong", time:j["time"]} )
-			break
-		case "pong":
-			var took  = (new Date).getTime() - j["time"]
-			console.log("Ping took", took, "ms")
-			break
+
+var client = {
+	master:false,
+	video:document.getElementById("video"),
+
+	onPlay: function (j, wsc) {
+		if (this.master) { return; }
+
+		var timeDifference = Math.abs(j.time - video.currentTime)
+		if (timeDifference > 1) { video.currentTime = j.time } 
+
+		if (j.type == "play") { video.play() } else if (j.type == "pause") { video.pause()};
+	},
+	onPause: function (j, wsc) { this.onPlay(j, wsc) },
+	onSeeked: function (j, wsc) { this.onPlay(j, wsc) },
+
+	onPing: function (j, wsc) {
+		wsc.sendMessage( {type:"pong", time:j.time} )
+	},
+	onPong: function (j, wsc) {
+		var took  = (new Date).getTime() - j.time
+		console.log("Ping took", took, "ms")
+		document.getElementById("ping").textContent = "Ping: " + took.toString() + "ms"
+	},
+	onSetVideo: function (j, wsc) {
+		this.video.src = j.url
+	},
+	setVideo: function(url) {
+		wsc.sendMessage( {type:"setvideo", url:url} )
 	}
 }
 
+function debugListener(e) {
+	console.log("Event:", e.type)
+	switch(e.type) {
+		case "seeked":
+			console.log("Seeked and seeking:", video.seeking, video.paused)
+	}
+}
+
+function onMedia(e) {
+	switch (e.type) {
+		case "play":
+		case "pause":
+		case "seeked":
+			if (client.master) {
+				wsc.sendMessage( {type:e.type, time:video.currentTime } )
+			}
+			break;
+	}
+}
+
+
+var video = document.getElementById("video")
+video.addEventListener("play", onMedia)
+video.addEventListener("pause", onMedia)
+video.addEventListener("seeked", onMedia)
+
+video.addEventListener("canplaythrough", debugListener)
+video.addEventListener("seeked", debugListener)
+
+var c = document.getElementById("progress")
+
+
+c.addEventListener("click", function(e) {
+	var rect = e.target.getBoundingClientRect();
+	var x = e.clientX - rect.left;
+
+	var p = x / c.width
+
+	var v = document.getElementById("video")
+
+	v.currentTime = v.duration * p
+})
+
+var cx = c.getContext("2d")
+
+function mediaInfo() {
+	setTimeout(mediaInfo, 1000/30)
+
+	cx.fillStyle ="#00F"
+	cx.fillRect(0, 0, c.width, c.height);
+	
+	cx.fillStyle ="#0F0"
+
+	var data = document.getElementById("data")
+	var v = document.getElementById("video")
+
+	var d = v.duration
+	var se = v.seekable
+	var b = v.buffered
+	infoHTML = "P: {0}<br>".format(v.currentTime)
+
+	var s, e;
+	for (var i = 0; i < se.length; i++) {
+		s = se.start(i)
+		e = se.end(i)
+		infoHTML += "S{0} s: {1} e: {2}<br>".format(i, s, e)
+	};
+	var x, w;
+	for (var i = 0; i < b.length; i++) {
+		s = b.start(i)
+		e = b.end(i)
+		infoHTML += "B{0} s: {1} e: {2}<br>".format(i, s, e)
+		// console.log(infoHTML)
+
+		var x1 = Math.floor( (s/d)*c.width )
+		var x2 = Math.floor( (e/d)*c.width )
+
+		cx.fillRect(x1, 0, x2-x1, c.height)
+
+	};
+
+	var x = Math.floor( (v.currentTime/d)*c.width )
+	
+	cx.fillStyle ="#F00"
+	// console.log(x, x+1)
+	cx.fillRect(x, 0, 1, c.height)
+
+	data.innerHTML = infoHTML;
+}
+
 var wsc = new WebSocketClient()
-wsc.addEventListener("ping", onEvent)
-wsc.addEventListener("pong", onEvent)
+wsc.client = client
 wsc.connect("ws://${wshost}:${wsport}/")
 
+document.getElementById("ping").addEventListener("click", function() {wsc.sendMessage( {type:"ping", time:(new Date).getTime()} )})
+document.getElementById("toggleMode").addEventListener("click", function(e) {client.master = !client.master; e.target.textContent = client.master ? "Become client" : "Become master";})
+document.getElementById("setVideo").addEventListener("click", function() {
+	client.setVideo(document.getElementById("videoUrl").value)
+})
+mediaInfo()
 
+function setVideoFromUrl(e) {
+	client.setVideo(e.target.href)
+	return false;
+}
+
+var vidLinks = document.getElementsByClassName("videoLink")
+for (var i = vidLinks.length - 1; i >= 0; i--) {
+	vidLinks[i].onclick = setVideoFromUrl
+};
 
 // wsc.send()
 </script>
 % if False:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <script type="text/javascript">
 var v = document.getElementById("video")
 var s = document.getElementById("status")
