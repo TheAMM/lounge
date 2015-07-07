@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import cherrypy
-import sqlite3
+# import sqlite3
 import os
 import re
 import time
@@ -8,8 +8,36 @@ import time
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
+import WebSocket
 
-SQLITE_DATABASE = "database.sqlite3"
+import logging
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("cherrypy.error").setLevel(logging.ERROR)
+logging.getLogger("cherrypy.access").setLevel(logging.ERROR)
+
+class CouchListener(WebSocket.WebSocketServerClient):
+	def on_identify(self, j, ws):
+		ws.uuid = j["uuid"]
+		ws.send({"type":"ping", "time":time.time()})
+		# print ws.uuid, "identified"
+		# print j, ws
+	
+	def on_ping(self, j, ws):
+		ws.send({"type":"pong", "time":j["time"]})
+	def on_pong(self, j, ws):
+		delta = time.time() - j["time"]
+		print "Ping to {} and back: {:0.1f}".format(ws.uuid, delta*1000)
+
+
+
+cl = CouchListener()
+wss = WebSocket.WebSocketServer( ('', 8088) , client=cl)
+wss.start()
+# Socket
+
+
+
+# SQLITE_DATABASE = "database.sqlite3"
 
 # Our CherryPy application
 tmplLookup = TemplateLookup(directories=['templates'], module_directory='tmp/mako')
@@ -21,26 +49,31 @@ class Root(object):
 
 	@cherrypy.expose
 	def index(self):
-		tmpl = tmplLookup.get_template("index.mako.html")
-
-		return tmpl.render()
+		tmpl = tmplLookup.get_template("testing.mako.html")
+		wshost = re.match(r'https?:\/\/(.*?)(?::\d+)$', cherrypy.request.base).group(1)
+		wsport = 8088
+		return tmpl.render(wshost=wshost, wsport=wsport)
 
 	# @cherrypy.expose
 	# def default(self, key=None, **kwargs):
 	# 	raise cherrypy.HTTPRedirect("/") 
 
 
-cherrypy.engine.subscribe('start', dbHandler.setup_database)
-# cherrypy.engine.subscribe('stop', cleanup_database)
+# cherrypy.engine.subscribe('start', dbHandler.setup_database)
 
+# cherrypy.engine.subscribe('start', dbHandler.setup_database)
+cherrypy.engine.subscribe('stop', wss.die)
+# cherrypy.engine.subscribe('stop', cleanup_database)
+staticDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "static")
+staticIco = os.path.join(staticDir,  "favicon.ico")
 config = {
-	"/favicon.ico": {
-		"tools.staticfile.on" : True
-		"tools.staticfile.filename" : os.path.join(os.path.dirname(os.path.realpath(__file__)), "static", "favicon.ico")
-	},
+	# "/favicon.ico": {
+		# "tools.staticfile.on" : True,
+		# "tools.staticfile.filename" : staticIco
+	# },
 	"/static": {
-		"tools.staticdir.on" : True
-		"tools.staticdir.dir" : os.path.join(os.path.dirname(os.path.realpath(__file__)), "static")
+		"tools.staticdir.on" : True,
+		"tools.staticdir.dir" : staticDir
 	}
 }
 
@@ -51,5 +84,5 @@ if __name__ != "__main__":
 	cherrypy.server.unsubscribe()
 	cherrypy.engine.start()
 else:
-	cherrypy.config.update({ 'server.socket_port': 9095, 'server.socket_host': "0.0.0.0"})
+	cherrypy.config.update({ 'server.socket_port': 8090, 'server.socket_host': "0.0.0.0"})
 	cherrypy.quickstart(wsgiapp)
