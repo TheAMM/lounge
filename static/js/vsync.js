@@ -13,13 +13,14 @@ if (!String.prototype.format) {
 }
 
 
-var WebSocketClient = function () {
+var WebSocketClient = function (room) {
 	if (!("WebSocket" in window)) {
 		console.log("No support for WebSocket!")
 	}
 	this.list = null;
 	this.sock = null;
 	this.uuid = this.generateUUID(6)
+	this.room = room || null
 	this.client = null;
 	this.listeners = {}
 };
@@ -100,7 +101,7 @@ WebSocketClient.prototype.connect = function (uri) {
 WebSocketClient.prototype.socketOnOpen = function (e, that) {
 	console.log("Socket open!");
 
-	that.sendMessage({type:"identify", uuid:that.uuid});
+	that.sendMessage({type:"identify", uuid:that.uuid, room:that.room});
 }
 WebSocketClient.prototype.socketOnClose = function (e, that) {
 	console.log("Socket closed!")

@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.DEBUG)
 	# from cStringIO import StringIO
 # except:
 from StringIO import StringIO
+
 class NoMoreToReadException(Exception):
 	pass
 def readOrException(self, c=-1):
@@ -20,21 +21,46 @@ def readOrException(self, c=-1):
 	if c != -1 and len(d) != c:
 		raise NoMoreToReadException("Couldn't read desired amount of bytes")
 	return d
-
 StringIO.readE = readOrException
 
 
 from base64 import b64encode
 from hashlib import sha1
 
-logging
+class Event(object):
+	def __init__(self, name, data):
+		self.name = name
+		self.data = data
+	def __str__(self):
+		return "<Event '{}' {}>".format(self.name, self.data)
 
-HOST = ''   # Symbolic name meaning all available interfaces
-PORT = 8088 # Arbitrary non-privileged port
+class EventDispatcher(object):
+	def _createDictIfNot(self):
+		if not hasattr(self, "eventListeners"):
+			self.eventListeners = {}
+	def dispatchEvent(self, name, data):
+		self._createDictIfNot()
+		e = Event(name, data)
+		# print self.__class__.__name__, e
+		e.source = self
+		if name in self.eventListeners:
+			for el in self.eventListeners[name]:
+				if el(e):
+					break
+
+	def addEventListener(self, name, function):
+		self._createDictIfNot()
+		if not name in self.eventListeners:
+			self.eventListeners[name] = []
+		self.eventListeners[name].append(function)
+	
+	def removeEventListener(self, name, function):
+		self._createDictIfNot()
+		if name in self.eventListeners and function in self.eventListeners[name]:
+			self.eventListeners[name].remove(function)
 
 
-
-class WebSocketThread(threading.Thread):
+class WebSocketThread(threading.Thread, EventDispatcher):
 	PROTOCOL_SWITCH_HEADERS = 'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {key}\r\n\r\n'
 	WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 	websocketKeyRegex = re.compile(r'(?im)Sec-WebSocket-Key:\s*(.{24})$')
@@ -49,6 +75,9 @@ class WebSocketThread(threading.Thread):
 		
 		self.server = server
 		self.conn = conn
+
+		self.rhost, self.rport = self.conn.getpeername()
+		self.lhost, self.lport = self.conn.getsockname()
 		# self.state = state
 
 		self.running = False
@@ -57,7 +86,8 @@ class WebSocketThread(threading.Thread):
 		self.handshaked = False
 	
 	def die(self):
-		self.server.removeThread(self)
+		# self.server.removeThread(self)
+		self.dispatchEvent("die", self)
 		self.running = False
 		self.conn.close()
 
@@ -177,7 +207,9 @@ class WebSocketThread(threading.Thread):
 			
 		# self.conn.close()
 		print "WebSocketThread out of loop"
-		self.die()
+		# self.die()
+
+
 
 # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -195,24 +227,15 @@ class WebSocketThread(threading.Thread):
 # #Start listening on socket
 # s.listen(10)
 # print '>> Socket now listening'
-class WebSocketServerClient(object):
-	eventListeners = {}
-	
-	def __init__(self):
-		pass
 
-	def addEventListener(self, name, function):
-		if not name in self.eventListeners:
-			self.eventListeners[name] = []
-		self.eventListeners[name].append(function)
-	
-	def removeEventListener(self, name, function):
-		if name in self.eventListeners and function in self.eventListeners[name]:
-			self.eventListeners[name].remove(function)
+
+
+class WebSocketServerClient(EventDispatcher):
 	
 	def processEvent(self, jsonData, ws):
 		if not "type" in jsonData:
 			return
+		self._createDictIfNot()
 		
 		name = jsonData["type"].lower()
 		funName = "on_"+name
@@ -272,6 +295,7 @@ class WebSocketServer(threading.Thread):
 
 	def createThread(self, conn):
 		newThread = WebSocketThread(self, conn)
+		newThread.addEventListener("die", self.removeThread)
 		self.threads.append(newThread)
 		newThread.start()
 	
@@ -282,8 +306,9 @@ class WebSocketServer(threading.Thread):
 	# 			changed = True
 	# 		self.oldState[k] = v
 	# 	return changed
-
 	def removeThread(self, thread):
+		if isinstance(thread, Event):
+			thread = thread.data
 		try:
 			self.threads.remove(thread)
 		except:
@@ -313,7 +338,7 @@ class WebSocketServer(threading.Thread):
 			try:
 				# Wait for a connection; blocks
 				conn, addr = self.sock.accept()
-				self.logger.info('Connected with {}:{}'.format(*addr))
+				self.logger.info('Connected with {} - {}:{}'.format(conn.getpeername(), *addr))
 				self.createThread(conn)
 			# except KeyboardInterrupt, e:
 				# self.logger.info("Quitting")

@@ -1,28 +1,27 @@
 <html>
   <head>
-    <%
-      title = "0x40 Url Shortener"
-    %>
-    <title>${title}</title>
+    <title>Lounge listing</title>
     
     <style type="text/css">
       .respacks { margin:20px; }
       #urlinput { min-width: 200px; }
     </style>
-
-    <script src="/static/js/0x40Colors.js"></script>
   </head>
   <body>
     <div class="container">
-      <h1>${title}</h1>
+      <h1>Lounges:</h1>
 
-      <form action="/api/new" method="post" enctype="multipart/form-data">
-        Shorten an url:
+      <div>
+        % for r in rooms:
         <div>
-          <input id="urlinput" type="url" name="url" />
-          <input type="submit" value="Shorten!"/>
+          <a href="/r/${r.key}">[${r.key}]</a> ${r.name | h} - ${len(r.users)}
+          <ol>
+            % for u in r.users:
+            <li>${u.uuid} - ${u.ws.rhost | h}:${u.ws.rport}</li>
+            % endfor
         </div>
-      </form>
+        % endfor
+      </div>
   </body>
   <script type="text/javascript"> randomBgColor() </script>
 </html>
