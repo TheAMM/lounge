@@ -88,6 +88,10 @@ WebSocketClient.prototype.rawSend = function (data) {
 WebSocketClient.prototype.sendMessage = function (jsonData) {
 	this.rawSend(JSON.stringify(jsonData));
 }
+WebSocketClient.prototype.reply = function (origData, jsonData) {
+	if ("rid" in origData) { jsonData.rid = origData.rid }
+	this.rawSend(JSON.stringify(jsonData));
+}
 WebSocketClient.prototype.connect = function (uri) {
 	// this.sock = new WebSocket("ws://0x40hu.es:8088/")
 	// console.log("Creating...")

@@ -10,7 +10,13 @@
   <body>
     <div class="container">
       <h1>Lounges:</h1>
-
+      <div>
+        <form action="/room" method="POST">
+          <input type="text" name="roomname" value="Room name" />
+          <input type="hidden" name="action" value="create" />
+          <input type="submit" value="Create room" />
+        </form>
+      </div>
       <div>
         % for r in rooms:
         <div>

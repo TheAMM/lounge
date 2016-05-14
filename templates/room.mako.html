@@ -42,6 +42,10 @@
 <script type="text/javascript" src="/static/js/vsync.js"></script>
 <script type="text/javascript">
 
+var config = {
+	room: "${roomKey}",
+}
+
 var User = function(uuid) {
 	this.uuid = uuid;
 	this.ping = -1;
@@ -94,6 +98,10 @@ var client = {
 			}
 		};
 		this.updateUsers()
+	},
+
+	onGetTime: function (j, wsc) {
+		wsc.sendMessage( {type:"time", time:this.video.currentTime} )
 	},
 
 	updateUsers: function() {
@@ -205,7 +213,8 @@ function mediaInfo() {
 
 var wsc = new WebSocketClient("${roomKey}")
 wsc.client = client
-wsc.connect("ws://${wshost}:${wsport}/")
+// wsc.connect("ws://${wshost}:${wsport}/"+wsc.uuid)
+wsc.connect("ws://${wshost}:${wsport}/"+config.room+"/"+wsc.uuid)
 
 document.getElementById("ping").addEventListener("click", function() {wsc.sendMessage( {type:"ping", time:(new Date).getTime()} )})
 document.getElementById("pingAll").addEventListener("click", function() {wsc.sendMessage( {type:"pingall"} )})
@@ -213,7 +222,7 @@ document.getElementById("toggleMode").addEventListener("click", function(e) {cli
 document.getElementById("setVideo").addEventListener("click", function() {
 	client.setVideo(document.getElementById("videoUrl").value)
 })
-mediaInfo()
+// mediaInfo()
 
 function setVideoFromUrl(e) {
 	client.setVideo(e.target.href)
